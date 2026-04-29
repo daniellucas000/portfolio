@@ -140,6 +140,10 @@
       margin-left: 5px;
       border: 1px solid transparent;
     }
+
+    img {
+      width: 20px;
+    }
   }
 
   &__separator {
@@ -159,6 +163,9 @@
   }
 
   &__address-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     font-size: 11px;
     color: #444;
     white-space: nowrap;
