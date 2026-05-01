@@ -1,28 +1,28 @@
 <script setup lang="ts">
-const winStore = useWindowsStore()
-const startMenuOpen = ref(false)
-const currentTime = ref('')
+const winStore = useWindowsStore();
+const startMenuOpen = ref(false);
+const currentTime = ref('');
 
-let clockInterval: ReturnType<typeof setInterval> | null = null
+let clockInterval: ReturnType<typeof setInterval> | null = null;
 
 function updateTime() {
-  const now = new Date()
+  const now = new Date();
   currentTime.value = now.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
-  })
+  });
 }
 
 onMounted(() => {
-  updateTime()
-  clockInterval = setInterval(updateTime, 1000)
-})
+  updateTime();
+  clockInterval = setInterval(updateTime, 1000);
+});
 
 onUnmounted(() => {
   if (clockInterval !== null) {
-    clearInterval(clockInterval)
+    clearInterval(clockInterval);
   }
-})
+});
 </script>
 
 <template>
@@ -47,21 +47,40 @@ onUnmounted(() => {
       <button
         v-for="win in winStore.taskbarWindows"
         :key="win.id"
-        class="taskbar__window-btn"
-        :class="{ 'taskbar__window-btn--active': win.focused && !win.minimized }"
+        :class="[
+          'taskbar__windows--btn',
+          {
+            'taskbar__windows--btn-active': true,
+          },
+        ]"
         :aria-label="`${win.title}, clique para minimizar`"
         @click="winStore.minimize(win.id)"
       >
-        <span class="taskbar__window-title">{{ win.title }}</span>
-        <div v-if="win.progress !== undefined" class="taskbar__window-progress">
-          <div class="taskbar__window-progress-bar" :style="{ width: `${win.progress}%` }" />
+        <span class="taskbar__windows--btn-title">{{ win.title }}</span>
+        <div
+          v-if="win.progress !== undefined"
+          class="taskbar__windows--btn-progress"
+        >
+          <div
+            class="taskbar__windows--btn-progress-bar"
+            :style="{ width: `${win.progress}%` }"
+          />
         </div>
       </button>
     </div>
 
     <div class="taskbar__tray" aria-label="Área de notificação">
-      <img src="/images/xp/icons/sound-small.png" class="taskbar__tray-icon" alt="" aria-hidden="true" />
-      <time class="taskbar__time" :datetime="currentTime" :aria-label="`Hora atual: ${currentTime}`">
+      <img
+        src="/images/xp/icons/sound-small.png"
+        class="taskbar__tray--icon"
+        alt=""
+        aria-hidden="true"
+      />
+      <time
+        class="taskbar__tray--time"
+        :datetime="currentTime"
+        :aria-label="`Hora atual: ${currentTime}`"
+      >
         {{ currentTime }}
       </time>
     </div>
@@ -78,7 +97,6 @@ onUnmounted(() => {
       @click="startMenuOpen = false"
     />
   </Teleport>
-
 </template>
 
 <style lang="scss" scoped>

@@ -24,6 +24,15 @@ function getCurrentRenameInput() {
   return renameInputs.get(renamingItem.value) || null;
 }
 
+const iconClasses = computed(() => (item, index) => [
+  'desktop__icons--icon',
+  {
+    'desktop__icons--icon-renaming': renamingItem.value === item?.id,
+    'desktop__icons--icon-focused': focusedIconIndex.value === index,
+    'desktop__icons--icon-selected': selectedIcons.value.has(item?.id),
+  },
+]);
+
 const {
   desktopIcons,
   visibleIcons,
@@ -125,15 +134,8 @@ function handleDesktopClick() {
             if (el) iconElements.set(item?.id, el as HTMLElement);
           }
         "
+        :class="iconClasses(item, index)"
         :data-desktop-icon-id="item?.id"
-        :class="[
-          'desktop__icon',
-          {
-            'desktop__icon--renaming': renamingItem === item?.id,
-            'desktop__icon--focused': focusedIconIndex === index,
-            'desktop__icon--selected': selectedIcons.has(item?.id),
-          },
-        ]"
         :aria-label="`${item?.label}, clique duas vezes para abrir`"
         :tabindex="
           focusedIconIndex === index ||
@@ -147,10 +149,14 @@ function handleDesktopClick() {
         @focus="focusedIconIndex = index"
       >
         <span
-          class="desktop__icon-img-wrapper"
+          class="desktop__icons--icon-img-wrapper"
           :style="{ '--icon-mask': `url(${item?.icon})` }"
         >
-          <img :src="item?.icon" class="desktop__icon-img" :alt="item?.label" />
+          <img
+            :src="item?.icon"
+            class="desktop__icons--icon-img"
+            :alt="item?.label"
+          />
         </span>
 
         <template v-if="renamingItem === item?.id">
@@ -167,7 +173,7 @@ function handleDesktopClick() {
             "
             :id="`desktop-rename-${item?.id}`"
             v-model="renameInput"
-            class="desktop__icon-input"
+            class="desktop__icons--icon-input"
             :aria-label="`Renomear para ${item?.label}`"
             @blur="saveRename(item?.id)"
             @keyup.enter="saveRename(item.id)"
@@ -175,7 +181,7 @@ function handleDesktopClick() {
           />
         </template>
 
-        <span v-else class="desktop__icon-label">
+        <span v-else class="desktop__icons--icon-label">
           {{ item?.label }}
         </span>
       </button>
