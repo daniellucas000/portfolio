@@ -39,22 +39,19 @@ function launch(data: { app: AppName; icon: string }) {
 
 <template>
   <div class="start-menu">
-    <!-- Header -->
     <div class="start-menu__header">
       <img
         src="/images/xp/avatar.jpg"
-        class="start-menu__avatar"
+        class="start-menu__header--avatar"
         alt="Foto do usuário"
       />
-      <span class="start-menu__username">Daniel</span>
+      <span class="start-menu__header--username">Daniel</span>
     </div>
 
     <div class="start-menu__header-divider" />
 
-    <!-- Body -->
     <div class="start-menu__body">
-      <!-- LEFT -->
-      <div class="start-menu__left">
+      <div class="start-menu__body--left">
         <StartMenuItem
           v-for="app in pinnedApps"
           :key="app.id"
@@ -63,7 +60,7 @@ function launch(data: { app: AppName; icon: string }) {
           @click="launch"
         />
 
-        <div class="start-menu__divider" role="separator" />
+        <div class="start-menu__body--divider" role="separator" />
 
         <StartMenuAllPrograms
           :items="allPrograms"
@@ -74,10 +71,9 @@ function launch(data: { app: AppName; icon: string }) {
         />
       </div>
 
-      <div class="start-menu__col-divider" role="separator" />
+      <div class="start-menu__body--col-divider" role="separator" />
 
-      <!-- RIGHT -->
-      <div class="start-menu__right">
+      <div class="start-menu__body--right">
         <StartMenuItem
           v-for="app in rightApps"
           :key="app.id"
@@ -87,25 +83,14 @@ function launch(data: { app: AppName; icon: string }) {
       </div>
     </div>
 
-    <!-- Footer -->
     <div class="start-menu__footer">
-      <button class="start-menu__footer-btn">
-        <img
-          src="/images/xp/icons/log-off.png"
-          class="start-menu__item-icon"
-          alt=""
-          aria-hidden="true"
-        />
+      <button class="start-menu__footer--btn">
+        <img src="/images/xp/icons/log-off.png" alt="" aria-hidden="true" />
         <span>Fazer logoff</span>
       </button>
 
-      <button class="start-menu__footer-btn">
-        <img
-          src="/images/xp/icons/power-off.png"
-          class="start-menu__item-icon"
-          alt=""
-          aria-hidden="true"
-        />
+      <button class="start-menu__footer--btn">
+        <img src="/images/xp/icons/power-off.png" alt="" aria-hidden="true" />
         <span>Desligar o computador</span>
       </button>
     </div>

@@ -55,7 +55,7 @@ const sortLabelMap: Record<string, string> = {
   modified: 'Modificado',
 };
 
-const selectedSortLabel = computed(() => 
+const selectedSortLabel = computed(() =>
   props.currentSort ? sortLabelMap[props.currentSort] : null
 );
 
@@ -111,10 +111,10 @@ onUnmounted(() => {
         @click="selectItem(item)"
         @focus="focusedIndex = flatItems.indexOf(item)"
       >
-        <span class="context-menu__item-label">{{ item.label }}</span>
+        <span class="context-menu__item--label">{{ item.label }}</span>
         <span
           v-if="item.hasSubmenu"
-          class="context-menu__arrow"
+          class="context-menu__item--arrow"
           aria-hidden="true"
           >▶</span
         >
@@ -122,7 +122,9 @@ onUnmounted(() => {
         <ContextMenuSubmenu
           v-if="item.submenu"
           :items="item.submenu"
-          :selected-label="item.label === 'Organizar ícones por' ? selectedSortLabel : null"
+          :selected-label="
+            item.label === 'Organizar ícones por' ? selectedSortLabel : null
+          "
           @select="
             (sub) => {
               sub.action?.();

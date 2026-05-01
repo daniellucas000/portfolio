@@ -51,18 +51,12 @@
         left: -10px;
       }
     }
-  }
 
-  &__arrow {
-    font-size: 5px;
-    color: black;
-    margin-left: 8px;
-  }
-
-  &__sub-icon {
-    width: 16px;
-    height: 16px;
-    margin-right: 6px;
+    &--arrow {
+      font-size: 5px;
+      color: black;
+      margin-left: 8px;
+    }
   }
 
   &__submenu {
@@ -76,14 +70,5 @@
     min-width: 180px;
     padding: 2px 0;
     z-index: 100000;
-  }
-
-  &__bullet {
-    font-weight: 700;
-    color: #003399;
-    margin-right: 6px;
-    width: 10px;
-    display: inline-block;
-    text-align: center;
   }
 }
