@@ -1,5 +1,0 @@
-export { useDesktopIcons } from './useDesktopIcons'
-export { useDesktopSelection } from './useDesktopSelection'
-export { useDesktopRename } from './useDesktopRename'
-export { useDesktopTrash } from './useDesktopTrash'
-export { useDesktopShortcuts } from './useDesktopShortcuts'
