@@ -2,7 +2,6 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 
 const sceneContainer = ref(null);
-const clickHintRef = ref(null);
 
 let renderer, cssRenderer, scene, camera, controls;
 let screenObject,
@@ -135,7 +134,6 @@ onMounted(async () => {
     isZoomedIn = true;
     controls.enabled = false;
     startZoom(CAMERA_CLOSE, 1);
-    clickHintRef.value.style.opacity = '0';
     setTimeout(() => {
       container.style.pointerEvents = 'auto';
     }, 1000);
@@ -148,7 +146,6 @@ onMounted(async () => {
     lastHoverState = false;
     container.style.pointerEvents = 'none';
     startZoom(CAMERA_FAR, 1);
-    clickHintRef.value.style.opacity = '1';
     setTimeout(() => {
       controls.enabled = true;
     }, 1000);
@@ -288,9 +285,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="sceneContainer" class="scene-container">
-    <div ref="clickHintRef" id="click-hint">Clique para interagir</div>
-  </div>
+  <div ref="sceneContainer" class="scene-container"></div>
 </template>
 
 <style>
@@ -305,24 +300,6 @@ onUnmounted(() => {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-}
-
-#click-hint {
-  position: fixed;
-  bottom: 40px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.5);
-  color: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 8px 18px;
-  border-radius: 20px;
-  font-size: 13px;
-  pointer-events: none;
-  backdrop-filter: blur(8px);
-  transition: opacity 0.4s ease;
-  animation: pulse 2s ease-in-out infinite;
 }
 
 @keyframes pulse {
