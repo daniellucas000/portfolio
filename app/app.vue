@@ -11,6 +11,8 @@ const screenState = reactive({
   lastHoverState: false,
 });
 
+const PDF_URL = '/CV_DANIEL_DEV.pdf';
+
 const SCREEN_POS = {
   x: -3.9,
   y: 98.0,
@@ -19,9 +21,14 @@ const SCREEN_POS = {
   rotationX: -0.187,
 };
 
+const PAPER_MESHES = new Set(['Paper2_ComputerDesk_0', 'Paper_ComputerDesk_0']);
+
+const cursorStyle = ref('default');
+
 let renderer, cssRenderer, scene, camera, controls;
 let screenObject, stencilMesh, maskMesh;
 let monitorMeshes = [];
+let paperMeshes = [];
 let animFrameId = null;
 
 const animState = {
@@ -91,6 +98,10 @@ function onMonitorLeave() {
   startZoom(screenState.isZoomedIn ? CAMERA_CLOSE : CAMERA_FAR, 1.2);
 }
 
+function downloadPDF() {
+  window.open(PDF_URL, '_blank');
+}
+
 function buildMouseHandlers(THREE) {
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
@@ -105,9 +116,19 @@ function buildMouseHandlers(THREE) {
     return raycaster.intersectObjects(monitorMeshes, false).length > 0;
   }
 
+  function hitPaper() {
+    raycaster.setFromCamera(mouse, camera);
+    return raycaster.intersectObjects(paperMeshes, false).length > 0;
+  }
+
   function handleMouseMove(event) {
     if (screenState.isAnimating) return;
     toNDC(event);
+
+    // Cursor pointer ao hover no papel
+    const onPaper = hitPaper();
+    cursorStyle.value = onPaper ? 'pointer' : 'default';
+
     const hitting = hitMonitor();
     if (hitting && !screenState.lastHoverState) {
       screenState.lastHoverState = true;
@@ -120,11 +141,17 @@ function buildMouseHandlers(THREE) {
 
   function handleClick(event) {
     if (screenState.isAnimating) return;
+    toNDC(event);
+
+    if (hitPaper()) {
+      downloadPDF();
+      return;
+    }
+
     if (!screenState.isZoomedIn) {
       zoomIn();
       return;
     }
-    toNDC(event);
     if (!hitMonitor()) zoomOut();
   }
 
@@ -309,10 +336,12 @@ onMounted(async () => {
         n.includes('monitor_screen')
       )
         node.visible = false;
+      if (PAPER_MESHES.has(node.name)) paperMeshes.push(node);
       node.castShadow = true;
       node.receiveShadow = true;
       if (node.material) node.material.roughness = 0.8;
     });
+
     scene.add(gltf.scene);
 
     const centerAzimuth = controls.getAzimuthalAngle();
@@ -341,7 +370,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="sceneContainer" class="scene-container">
+  <div
+    ref="sceneContainer"
+    class="scene-container"
+    :style="{ cursor: cursorStyle }"
+  >
     <div
       ref="iframeContainer"
       class="iframe-container"
@@ -357,7 +390,9 @@ onUnmounted(() => {
 </template>
 
 <style>
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
