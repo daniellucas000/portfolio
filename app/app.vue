@@ -3,6 +3,10 @@ import { ref, reactive, onMounted, onUnmounted } from 'vue';
 
 const sceneContainer = ref(null);
 const iframeContainer = ref(null);
+const sceneReady = ref(false);
+const iframePointerEvents = ref('none');
+const iframeSrc = ref(undefined);
+const cursorStyle = ref('default');
 
 const screenState = reactive({
   isZoomedIn: false,
@@ -23,13 +27,13 @@ const SCREEN_POS = {
 
 const PAPER_MESHES = new Set(['Paper2_ComputerDesk_0', 'Paper_ComputerDesk_0']);
 
-const cursorStyle = ref('default');
-
 let renderer, cssRenderer, scene, camera, controls;
 let screenObject, stencilMesh, maskMesh;
 let monitorMeshes = [];
 let paperMeshes = [];
 let animFrameId = null;
+let needsRender = true;
+let cleanupMouseHandlers = null;
 
 const animState = {
   progress: 0,
@@ -56,9 +60,9 @@ function startZoom(targetCam, durationSeconds = 1) {
   animState.startTarget.copy(controls.target);
   animState.endCamPos.copy(targetCam.position);
   animState.endTarget.copy(targetCam.target);
+  needsRender = true;
 }
 
-const iframePointerEvents = ref('none');
 function enableIframeInteraction() {
   iframePointerEvents.value = 'auto';
 }
@@ -125,9 +129,7 @@ function buildMouseHandlers(THREE) {
     if (screenState.isAnimating) return;
     toNDC(event);
 
-    // Cursor pointer ao hover no papel
-    const onPaper = hitPaper();
-    cursorStyle.value = onPaper ? 'pointer' : 'default';
+    cursorStyle.value = hitPaper() ? 'pointer' : 'default';
 
     const hitting = hitMonitor();
     if (hitting && !screenState.lastHoverState) {
@@ -147,7 +149,6 @@ function buildMouseHandlers(THREE) {
       downloadPDF();
       return;
     }
-
     if (!screenState.isZoomedIn) {
       zoomIn();
       return;
@@ -168,13 +169,15 @@ function handleKeydown(e) {
   if (e.key === 'Escape') zoomOut();
 }
 
-function buildAnimateLoop() {
+function buildAnimateLoop(clock) {
   function animate() {
     animFrameId = requestAnimationFrame(animate);
 
     if (screenState.isAnimating) {
-      animState.progress += 0.016 / animState.duration;
+      const delta = clock.getDelta();
+      animState.progress += delta / animState.duration;
       const t = easeInOutCubic(Math.min(animState.progress, 1));
+
       camera.position.lerpVectors(
         animState.startCamPos,
         animState.endCamPos,
@@ -185,8 +188,16 @@ function buildAnimateLoop() {
         animState.endTarget,
         t
       );
+
       if (animState.progress >= 1) screenState.isAnimating = false;
+      needsRender = true;
     }
+
+    const controlsMoved = controls.update();
+    if (controlsMoved) needsRender = true;
+
+    if (!needsRender) return;
+    needsRender = false;
 
     screenObject.position.set(SCREEN_POS.x, SCREEN_POS.y, SCREEN_POS.z);
     screenObject.scale.setScalar(SCREEN_POS.scale);
@@ -201,11 +212,11 @@ function buildAnimateLoop() {
     maskMesh.rotation.copy(screenObject.rotation);
     maskMesh.scale.copy(screenObject.scale);
 
-    controls.update();
     renderer.clear();
     renderer.render(scene, camera);
     cssRenderer.render(scene, camera);
   }
+
   animate();
 }
 
@@ -214,18 +225,21 @@ function handleResize() {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   cssRenderer.setSize(window.innerWidth, window.innerHeight);
+  needsRender = true;
 }
 
-let cleanupMouseHandlers = null;
-
 onMounted(async () => {
-  const THREE = await import('three');
-  const { GLTFLoader } =
-    await import('three/examples/jsm/loaders/GLTFLoader.js');
-  const { OrbitControls } =
-    await import('three/examples/jsm/controls/OrbitControls.js');
-  const { CSS3DRenderer, CSS3DObject } =
-    await import('three/examples/jsm/renderers/CSS3DRenderer.js');
+  const [
+    THREE,
+    { GLTFLoader },
+    { OrbitControls },
+    { CSS3DRenderer, CSS3DObject },
+  ] = await Promise.all([
+    import('three'),
+    import('three/examples/jsm/loaders/GLTFLoader.js'),
+    import('three/examples/jsm/controls/OrbitControls.js'),
+    import('three/examples/jsm/renderers/CSS3DRenderer.js'),
+  ]);
 
   CAMERA_FAR.position = new THREE.Vector3(0, 130, 400);
   CAMERA_FAR.target = new THREE.Vector3(-3.8, 100, 0);
@@ -255,7 +269,7 @@ onMounted(async () => {
     stencil: true,
   });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setClearColor(0x000000, 0);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -322,13 +336,22 @@ onMounted(async () => {
   controls.minPolarAngle = Math.PI / 4;
   controls.maxPolarAngle = Math.PI / 2.2;
 
+  controls.addEventListener('change', () => {
+    needsRender = true;
+  });
+
+  const clock = new THREE.Clock();
+
   const loader = new GLTFLoader();
+
   loader.load('/scene.gltf', (gltf) => {
     gltf.scene.traverse((node) => {
       if (!node.isMesh) return;
       const n = node.name.toLowerCase();
+
       if (n.includes('monitor') || n.includes('computer_monitor'))
         monitorMeshes.push(node);
+
       if (
         n.includes('screen') ||
         n.includes('glass') ||
@@ -336,7 +359,9 @@ onMounted(async () => {
         n.includes('monitor_screen')
       )
         node.visible = false;
+
       if (PAPER_MESHES.has(node.name)) paperMeshes.push(node);
+
       node.castShadow = true;
       node.receiveShadow = true;
       if (node.material) node.material.roughness = 0.8;
@@ -351,13 +376,17 @@ onMounted(async () => {
     camera.position.copy(CAMERA_FAR.position);
     controls.target.copy(CAMERA_FAR.target);
     controls.update();
+
+    sceneReady.value = true;
+    iframeSrc.value = 'https://win-xp-7ht.pages.dev/';
+    needsRender = true;
   });
 
   cleanupMouseHandlers = buildMouseHandlers(THREE);
   window.addEventListener('keydown', handleKeydown);
   window.addEventListener('resize', handleResize);
 
-  buildAnimateLoop();
+  buildAnimateLoop(clock);
 });
 
 onUnmounted(() => {
@@ -375,24 +404,31 @@ onUnmounted(() => {
     class="scene-container"
     :style="{ cursor: cursorStyle }"
   >
+    <Transition name="splash-fade">
+      <div v-if="!sceneReady" class="splash" aria-label="Carregando cena 3D">
+        <div class="splash-ring" />
+        <span class="splash-label">carregando cena...</span>
+      </div>
+    </Transition>
+
     <div
       ref="iframeContainer"
       class="iframe-container"
       :style="{ pointerEvents: iframePointerEvents }"
     >
       <iframe
-        src="https://win-xp-7ht.pages.dev/"
+        v-if="iframeSrc"
+        :src="iframeSrc"
         class="iframe-screen"
         title="Monitor Screen"
+        loading="lazy"
       />
     </div>
   </div>
 </template>
 
 <style>
-*,
-*::before,
-*::after {
+* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -415,5 +451,51 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   border: none;
+}
+
+.splash {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background-color: #121110;
+}
+
+.splash-ring {
+  width: 36px;
+  height: 36px;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-top-color: rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+.splash-label {
+  font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: lowercase;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.splash-fade-leave-active {
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s ease;
+}
+
+.splash-fade-leave-to {
+  opacity: 0;
+  transform: scale(1.03);
 }
 </style>
