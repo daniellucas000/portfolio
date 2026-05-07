@@ -1,6 +1,4 @@
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue';
-
 const sceneContainer = ref(null);
 const iframeContainer = ref(null);
 const sceneReady = ref(false);
@@ -17,13 +15,13 @@ const screenState = reactive({
 
 const PDF_URL = '/CV_DANIEL_DEV.pdf';
 
-const SCREEN_POS = {
+const SCREEN_POS = reactive({
   x: -3.9,
-  y: 98.0,
+  y: 97.5,
   z: 39.2,
-  scale: 0.0257,
-  rotationX: -0.187,
-};
+  scale: 0.0285,
+  rotationX: -0.144,
+});
 
 const PAPER_MESHES = new Set(['Paper2_ComputerDesk_0', 'Paper_ComputerDesk_0']);
 
@@ -173,8 +171,9 @@ function buildAnimateLoop(clock) {
   function animate() {
     animFrameId = requestAnimationFrame(animate);
 
+    const delta = clock.getDelta();
+
     if (screenState.isAnimating) {
-      const delta = clock.getDelta();
       animState.progress += delta / animState.duration;
       const t = easeInOutCubic(Math.min(animState.progress, 1));
 
@@ -241,11 +240,11 @@ onMounted(async () => {
     import('three/examples/jsm/renderers/CSS3DRenderer.js'),
   ]);
 
-  CAMERA_FAR.position = new THREE.Vector3(0, 130, 400);
+  CAMERA_FAR.position = new THREE.Vector3(-100, 200, 350);
   CAMERA_FAR.target = new THREE.Vector3(-3.8, 100, 0);
   CAMERA_CLOSE.position = new THREE.Vector3(-3.9, 99.0, 200.0);
   CAMERA_CLOSE.target = new THREE.Vector3(-3.9, 95.0, 28.0);
-  CAMERA_HOVER.position = new THREE.Vector3(-3.9, 104.0, 66.0);
+  CAMERA_HOVER.position = new THREE.Vector3(-3.9, 80, 66.0);
   CAMERA_HOVER.target = new THREE.Vector3(-3.9, 95.5, 28.0);
 
   animState.startCamPos = new THREE.Vector3();
