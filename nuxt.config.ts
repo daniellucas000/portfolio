@@ -5,6 +5,7 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
+      title: 'Daniel Dev',
       link: [
         {
           rel: 'preconnect',
