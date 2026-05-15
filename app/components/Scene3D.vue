@@ -21,6 +21,7 @@ const {
   cameraClose,
   monitorMeshes,
   paperMeshes,
+  setMonitorLightTarget,
   init,
   handleResize,
   dispose,
@@ -46,6 +47,7 @@ const { buildHandlers, handleKeydown } = useMouseInteraction({
   cameraClose,
   startZoom,
   onAnimationEnd,
+  setMonitorLightTarget,
   controls,
 });
 

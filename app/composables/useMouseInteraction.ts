@@ -15,6 +15,7 @@ interface UseMouseInteractionOptions {
   cameraClose: Ref<CameraTarget | null>;
   startZoom: (target: CameraTarget, duration?: number) => void;
   onAnimationEnd: (cb: () => void) => void;
+  setMonitorLightTarget: (bright: boolean) => void;
   controls: Ref<{ enabled: boolean } | null>;
 }
 
@@ -31,13 +32,13 @@ export function useMouseInteraction(options: UseMouseInteractionOptions) {
     cameraClose,
     startZoom,
     onAnimationEnd,
+    setMonitorLightTarget,
     controls,
   } = options;
 
   function setCssRendererPointerEvents(value: 'auto' | 'none') {
-    if (cssRenderer.value) {
+    if (cssRenderer.value)
       cssRenderer.value.domElement.style.pointerEvents = value;
-    }
   }
 
   onAnimationEnd(() => {
@@ -47,6 +48,7 @@ export function useMouseInteraction(options: UseMouseInteractionOptions) {
     } else {
       if (controls.value) controls.value.enabled = true;
       setCssRendererPointerEvents('auto');
+      setMonitorLightTarget(false); // apaga ao voltar
     }
   });
 
@@ -55,6 +57,7 @@ export function useMouseInteraction(options: UseMouseInteractionOptions) {
     screenState.isZoomedIn = true;
     screenState.isAnimating = false;
     if (controls.value) controls.value.enabled = false;
+    setMonitorLightTarget(true); // acende ao dar zoom
     startZoom(cameraClose.value, 0.8);
   }
 
@@ -65,6 +68,7 @@ export function useMouseInteraction(options: UseMouseInteractionOptions) {
     iframePointerEvents.value = 'none';
     setCssRendererPointerEvents('auto');
     startZoom(cameraFar.value, 0.8);
+    // luz apaga no onAnimationEnd para coincidir com o fim do zoom
   }
 
   function downloadPDF() {
@@ -92,10 +96,22 @@ export function useMouseInteraction(options: UseMouseInteractionOptions) {
       return raycaster.intersectObjects(paperMeshes.value, false).length > 0;
     }
 
+    let isHoveringMonitor = false;
+
     function handleMouseMove(event: MouseEvent) {
       if (screenState.isZoomedIn || screenState.isAnimating) return;
       toNDC(event);
-      cursorStyle.value = hitPaper() || hitMonitor() ? 'pointer' : 'default';
+      const onMonitor = hitMonitor();
+      const onPaper = hitPaper();
+      cursorStyle.value = onMonitor || onPaper ? 'pointer' : 'default';
+
+      if (onMonitor && !isHoveringMonitor) {
+        isHoveringMonitor = true;
+        setMonitorLightTarget(true);
+      } else if (!onMonitor && isHoveringMonitor) {
+        isHoveringMonitor = false;
+        setMonitorLightTarget(false);
+      }
     }
 
     function handleClick(event: MouseEvent) {
@@ -105,7 +121,10 @@ export function useMouseInteraction(options: UseMouseInteractionOptions) {
         downloadPDF();
         return;
       }
-      if (hitMonitor()) zoomIn();
+      if (hitMonitor()) {
+        isHoveringMonitor = false;
+        zoomIn();
+      }
     }
 
     function handleDocumentClick(event: MouseEvent) {

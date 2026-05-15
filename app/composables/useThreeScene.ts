@@ -1,4 +1,10 @@
-import type { Object3D, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
+import type {
+  Object3D,
+  PerspectiveCamera,
+  PointLight,
+  Scene,
+  WebGLRenderer,
+} from 'three';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type {
   CSS3DObject,
@@ -11,6 +17,10 @@ import {
   CAM_CLOSE,
 } from '~/constants/scene';
 import type { CameraTarget } from './useSceneAnimation';
+
+const LIGHT_DIM = 1200; // intensidade padrão (afastado)
+const LIGHT_BRIGHT = 3000; // intensidade ao passar mouse / zoom
+const LIGHT_SPEED = 3; // velocidade do fade (por segundo)
 
 export function useThreeScene(
   sceneContainer: Ref<HTMLElement | null>,
@@ -34,6 +44,16 @@ export function useThreeScene(
   let stencilMesh: any;
   let maskMesh: any;
   let animFrameId: number | null = null;
+
+  // luz do monitor — acessível fora para fade
+  let monitorLight: PointLight | null = null;
+  let lightTarget = LIGHT_DIM; // intensidade desejada
+  let lightCurrent = LIGHT_DIM; // intensidade atual (interpolada)
+
+  function setMonitorLightTarget(bright: boolean) {
+    lightTarget = bright ? LIGHT_BRIGHT : LIGHT_DIM;
+    needsRender.value = true;
+  }
 
   async function init(
     onReady: () => void,
@@ -60,6 +80,7 @@ export function useThreeScene(
       target: new THREE.Vector3(...CAM_CLOSE.target),
     };
 
+    // CSS3D Renderer
     const css3dRenderer = new CSS3DR();
     css3dRenderer.setSize(window.innerWidth, window.innerHeight);
     Object.assign(css3dRenderer.domElement.style, {
@@ -71,6 +92,7 @@ export function useThreeScene(
     sceneContainer.value!.appendChild(css3dRenderer.domElement);
     cssRenderer.value = css3dRenderer;
 
+    // WebGL Renderer
     renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
@@ -91,17 +113,22 @@ export function useThreeScene(
     });
     sceneContainer.value!.appendChild(renderer.domElement);
 
+    // Scene
     scene = new THREE.Scene();
     scene.add(new THREE.AmbientLight(0xffffff, 0.15));
-    const monitorLight = new THREE.PointLight(0x88ccff, 3000, 500);
+
+    monitorLight = new THREE.PointLight(0x88ccff, LIGHT_DIM, 500);
     monitorLight.position.set(-3.8, 105, 60);
     monitorLight.castShadow = true;
     monitorLight.shadow.bias = -0.001;
     scene.add(monitorLight);
+    lightCurrent = LIGHT_DIM;
 
+    // CSS3D screen object
     screenObject = new CSS3DO(iframeContainer.value!);
     scene.add(screenObject);
 
+    // Stencil mesh
     const stencilMat = new THREE.MeshBasicMaterial({
       colorWrite: false,
       depthWrite: false,
@@ -118,6 +145,7 @@ export function useThreeScene(
     stencilMesh.renderOrder = 0;
     scene.add(stencilMesh);
 
+    // Mask mesh
     const maskMat = new THREE.MeshBasicMaterial({
       color: 0x000000,
       opacity: 0,
@@ -133,6 +161,7 @@ export function useThreeScene(
     maskMesh.renderOrder = 1;
     scene.add(maskMesh);
 
+    // Camera & Controls
     const cam = new THREE.PerspectiveCamera(
       45,
       window.innerWidth / window.innerHeight,
@@ -196,6 +225,14 @@ export function useThreeScene(
 
       tickAnimation(delta);
 
+      // Fade suave da luz do monitor
+      if (monitorLight && Math.abs(lightCurrent - lightTarget) > 0.5) {
+        lightCurrent +=
+          (lightTarget - lightCurrent) * Math.min(LIGHT_SPEED * delta, 1);
+        monitorLight.intensity = lightCurrent;
+        needsRender.value = true;
+      }
+
       const controlsMoved = orbitControls.update();
       if (controlsMoved) needsRender.value = true;
       if (!needsRender.value) return;
@@ -248,6 +285,7 @@ export function useThreeScene(
     cameraClose,
     monitorMeshes,
     paperMeshes,
+    setMonitorLightTarget,
     init,
     handleResize,
     dispose,
