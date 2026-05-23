@@ -1,77 +1,80 @@
 <script setup lang="ts">
+import { useEventListener, useNow } from '@vueuse/core';
 import { useThreeScene } from '~/composables/useThreeScene';
-import { useSceneAnimation } from '~/composables/useSceneAnimation';
 import { useMouseInteraction } from '~/composables/useMouseInteraction';
+import {
+  useSceneAnimationStore,
+  type CameraTarget,
+} from '~/stores/sceneAnimation';
+import { useThreeSceneStore } from '~/stores/threeScene';
 import { IFRAME_SRC } from '~/constants/scene';
+import BiosScreen from './BiosScreen.vue';
 
 const sceneContainer = ref<HTMLElement | null>(null);
 const iframeContainer = ref<HTMLElement | null>(null);
-
 const iframePointerEvents = ref<'none' | 'auto'>('none');
 const iframeSrc = ref<string | undefined>(undefined);
 const cursorStyle = ref('default');
+const showBios = ref(true);
+const monitorClicked = ref(false);
 
-const {
-  sceneReady,
-  needsRender,
-  camera,
-  controls,
-  cssRenderer,
-  cameraFar,
-  cameraClose,
-  monitorMeshes,
-  paperMeshes,
-  setMonitorLightTarget,
-  init,
-  handleResize,
-  dispose,
-} = useThreeScene(sceneContainer, iframeContainer);
+const threeStore = useThreeSceneStore();
+const animStore = useSceneAnimationStore();
 
-const {
-  screenState,
-  initAnimVectors,
-  startZoom,
-  tickAnimation,
-  onAnimationEnd,
-} = useSceneAnimation(camera, controls, needsRender);
+const now = useNow({ interval: 1000 });
+const currentTime = computed(() =>
+  now.value.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+);
+
+const { camera, controls, cssRenderer, init, handleResize, dispose } =
+  useThreeScene(sceneContainer, iframeContainer);
+
+const startZoom = (target: CameraTarget, duration?: number) => {
+  monitorClicked.value = true;
+  animStore.startZoom(target, duration, threeStore);
+};
+
+const tickAnimation = (delta: number) =>
+  animStore.tickAnimation(delta, threeStore);
 
 const { buildHandlers, handleKeydown } = useMouseInteraction({
   camera,
   cssRenderer,
-  monitorMeshes,
-  paperMeshes,
-  screenState,
+  monitorMeshes: computed(() => threeStore.monitorMeshes),
+  paperMeshes: computed(() => threeStore.paperMeshes),
+  screenState: animStore.screenState,
   cursorStyle,
   iframePointerEvents,
-  cameraFar,
-  cameraClose,
+  cameraFar: computed(() => threeStore.cameraFar),
+  cameraClose: computed(() => threeStore.cameraClose),
   startZoom,
-  onAnimationEnd,
-  setMonitorLightTarget,
+  onAnimationEnd: animStore.onAnimationEnd,
+  setMonitorLightTarget: threeStore.setMonitorLightTarget,
   controls,
 });
 
-let cleanupMouseHandlers: (() => void) | null = null;
+useEventListener(window, 'resize', handleResize);
+useEventListener(window, 'keydown', handleKeydown);
 
 onMounted(async () => {
+  animStore.setRefs(camera, controls);
+
   await init(() => {
     iframeSrc.value = IFRAME_SRC;
   }, tickAnimation);
 
   const THREE = await import('three');
-  initAnimVectors(THREE);
+  animStore.initAnimVectors(THREE);
 
-  cleanupMouseHandlers = buildHandlers(THREE);
-
-  window.addEventListener('keydown', handleKeydown);
-  window.addEventListener('resize', handleResize);
+  buildHandlers(THREE);
 });
 
 onUnmounted(() => {
   dispose();
-  cleanupMouseHandlers?.();
-  window.removeEventListener('keydown', handleKeydown);
-  window.removeEventListener('resize', handleResize);
 });
 </script>
 
@@ -81,10 +84,25 @@ onUnmounted(() => {
     class="scene-container"
     :style="{ cursor: cursorStyle }"
   >
-    <Transition name="splash-fade">
-      <div v-if="!sceneReady" class="splash" aria-label="Carregando cena 3D">
-        <div class="splash-ring" />
-        <span class="splash-label">carregando cena...</span>
+    <BiosScreen v-if="showBios" @done="showBios = false" />
+
+    <Transition name="hint-fade">
+      <p
+        v-if="threeStore.sceneReady && !showBios && !monitorClicked"
+        class="hint-text"
+      >
+        Clique no monitor para iniciar
+      </p>
+    </Transition>
+
+    <Transition name="hint-fade">
+      <div
+        v-if="monitorClicked && !animStore.screenState.isZoomedIn"
+        class="info-overlay"
+      >
+        <span>Portfolio Daniel</span>
+        <span>Desenvolvedor Fullstack</span>
+        <span>{{ currentTime }}</span>
       </div>
     </Transition>
 
@@ -105,9 +123,7 @@ onUnmounted(() => {
 </template>
 
 <style>
-*,
-*::before,
-*::after {
+* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -132,49 +148,55 @@ onUnmounted(() => {
   border: none;
 }
 
-.splash {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  background-color: #121110;
-}
-
-.splash-ring {
-  width: 36px;
-  height: 36px;
-  border: 2px solid rgba(255, 255, 255, 0.08);
-  border-top-color: rgba(255, 255, 255, 0.5);
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-}
-
-.splash-label {
-  font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  color: rgba(255, 255, 255, 0.3);
-  text-transform: lowercase;
-}
-
 @keyframes spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-.splash-fade-leave-active {
-  transition:
-    opacity 0.7s ease,
-    transform 0.7s ease;
+.hint-text {
+  position: absolute;
+  bottom: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 1rem;
+  letter-spacing: 0.15em;
+  color: #000;
+  pointer-events: none;
+  white-space: nowrap;
+  background: #fff;
+  padding: 5px;
 }
 
-.splash-fade-leave-to {
+.info-overlay {
+  position: absolute;
+  top: 32px;
+  left: 36px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  pointer-events: none;
+
+  span {
+    background: #fff;
+    padding: 5px;
+    color: #000;
+    width: fit-content;
+  }
+}
+
+.hint-fade-enter-active,
+.hint-fade-leave-active {
+  transition: opacity 0.8s ease;
+}
+.hint-fade-enter-from,
+.hint-fade-leave-to {
   opacity: 0;
-  transform: scale(1.03);
 }
 </style>

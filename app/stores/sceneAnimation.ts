@@ -1,6 +1,9 @@
-import type { Camera, Vector3 } from 'three';
-import type * as ThreeTypes from 'three';
+import { defineStore } from 'pinia';
+import type { Camera } from 'three';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import type * as ThreeTypes from 'three';
+import type { Vector3 } from 'three';
+import type { useThreeSceneStore } from './threeScene';
 
 export interface CameraTarget {
   position: Vector3;
@@ -18,11 +21,9 @@ function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
-export function useSceneAnimation(
-  camera: Ref<Camera | null>,
-  controls: Ref<OrbitControls | null>,
-  needsRender: Ref<boolean>
-) {
+type ThreeSceneStore = ReturnType<typeof useThreeSceneStore>;
+
+export const useSceneAnimationStore = defineStore('sceneAnimation', () => {
   const screenState = reactive<ScreenState>({
     isZoomedIn: false,
     isHovered: false,
@@ -39,7 +40,18 @@ export function useSceneAnimation(
     endTarget: null as Vector3 | null,
   });
 
+  const camera = ref<Camera | null>(null);
+  const controls = ref<OrbitControls | null>(null);
+
   let _onAnimationEnd: (() => void) | null = null;
+
+  function setRefs(cam: Ref<Camera | null>, ctrl: Ref<OrbitControls | null>) {
+    camera.value = cam.value;
+    controls.value = ctrl.value;
+
+    watch(cam, (v) => (camera.value = v));
+    watch(ctrl, (v) => (controls.value = v));
+  }
 
   function onAnimationEnd(cb: () => void) {
     _onAnimationEnd = cb;
@@ -52,7 +64,11 @@ export function useSceneAnimation(
     animState.endTarget = new THREE.Vector3();
   }
 
-  function startZoom(targetCam: CameraTarget, durationSeconds = 1) {
+  function startZoom(
+    targetCam: CameraTarget,
+    durationSeconds = 1,
+    threeStore: ThreeSceneStore
+  ) {
     if (!camera.value || !controls.value) return;
     if (
       !animState.startCamPos ||
@@ -61,6 +77,7 @@ export function useSceneAnimation(
       !animState.endTarget
     )
       return;
+
     screenState.isAnimating = true;
     animState.progress = 0;
     animState.duration = durationSeconds;
@@ -68,10 +85,10 @@ export function useSceneAnimation(
     animState.startTarget.copy(controls.value.target);
     animState.endCamPos.copy(targetCam.position);
     animState.endTarget.copy(targetCam.target);
-    needsRender.value = true;
+    threeStore.needsRender = true;
   }
 
-  function tickAnimation(delta: number): void {
+  function tickAnimation(delta: number, threeStore: ThreeSceneStore): void {
     if (!screenState.isAnimating) return;
     if (!camera.value || !controls.value) return;
     if (
@@ -100,15 +117,18 @@ export function useSceneAnimation(
       screenState.isAnimating = false;
       _onAnimationEnd?.();
     }
-    needsRender.value = true;
+    threeStore.needsRender = true;
   }
 
   return {
     screenState,
     animState,
+    camera,
+    controls,
+    setRefs,
+    onAnimationEnd,
     initAnimVectors,
     startZoom,
     tickAnimation,
-    onAnimationEnd,
   };
-}
+});

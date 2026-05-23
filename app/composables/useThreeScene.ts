@@ -1,5 +1,4 @@
 import type {
-  Object3D,
   PerspectiveCamera,
   PointLight,
   Scene,
@@ -16,44 +15,37 @@ import {
   CAM_FAR,
   CAM_CLOSE,
 } from '~/constants/scene';
-import type { CameraTarget } from './useSceneAnimation';
+import { useThreeSceneStore } from '~/stores/threeScene';
 
-const LIGHT_DIM = 1200; // intensidade padrão (afastado)
-const LIGHT_BRIGHT = 3000; // intensidade ao passar mouse / zoom
-const LIGHT_SPEED = 3; // velocidade do fade (por segundo)
+const LIGHT_DIM = 1200;
+const LIGHT_BRIGHT = 3000;
+const LIGHT_SPEED = 3;
 
 export function useThreeScene(
   sceneContainer: Ref<HTMLElement | null>,
   iframeContainer: Ref<HTMLElement | null>
 ) {
-  const sceneReady = ref(false);
-  const needsRender = ref(true);
+  const store = useThreeSceneStore();
 
-  const cameraFar = ref<CameraTarget | null>(null);
-  const cameraClose = ref<CameraTarget | null>(null);
-
-  const monitorMeshes = ref<Object3D[]>([]);
-  const paperMeshes = ref<Object3D[]>([]);
+  const camera = ref<PerspectiveCamera | null>(null);
+  const controls = ref<OrbitControls | null>(null);
+  const cssRenderer = ref<CSS3DRenderer | null>(null);
 
   let renderer: WebGLRenderer;
-  let cssRenderer: Ref<CSS3DRenderer | null> = ref(null);
   let scene: Scene;
-  let camera: Ref<PerspectiveCamera | null> = ref(null);
-  let controls: Ref<OrbitControls | null> = ref(null);
   let screenObject: CSS3DObject;
   let stencilMesh: any;
   let maskMesh: any;
   let animFrameId: number | null = null;
-
-  // luz do monitor — acessível fora para fade
   let monitorLight: PointLight | null = null;
-  let lightTarget = LIGHT_DIM; // intensidade desejada
-  let lightCurrent = LIGHT_DIM; // intensidade atual (interpolada)
+  let lightCurrent = LIGHT_DIM;
 
-  function setMonitorLightTarget(bright: boolean) {
-    lightTarget = bright ? LIGHT_BRIGHT : LIGHT_DIM;
-    needsRender.value = true;
-  }
+  watch(
+    () => store.lightBright,
+    () => {
+      store.needsRender = true;
+    }
+  );
 
   async function init(
     onReady: () => void,
@@ -71,16 +63,17 @@ export function useThreeScene(
       import('three/examples/jsm/renderers/CSS3DRenderer.js'),
     ]);
 
-    cameraFar.value = {
-      position: new THREE.Vector3(...CAM_FAR.position),
-      target: new THREE.Vector3(...CAM_FAR.target),
-    };
-    cameraClose.value = {
-      position: new THREE.Vector3(...CAM_CLOSE.position),
-      target: new THREE.Vector3(...CAM_CLOSE.target),
-    };
+    store.setCameraTargets(
+      {
+        position: new THREE.Vector3(...CAM_FAR.position),
+        target: new THREE.Vector3(...CAM_FAR.target),
+      },
+      {
+        position: new THREE.Vector3(...CAM_CLOSE.position),
+        target: new THREE.Vector3(...CAM_CLOSE.target),
+      }
+    );
 
-    // CSS3D Renderer
     const css3dRenderer = new CSS3DR();
     css3dRenderer.setSize(window.innerWidth, window.innerHeight);
     Object.assign(css3dRenderer.domElement.style, {
@@ -92,7 +85,6 @@ export function useThreeScene(
     sceneContainer.value!.appendChild(css3dRenderer.domElement);
     cssRenderer.value = css3dRenderer;
 
-    // WebGL Renderer
     renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
@@ -113,7 +105,6 @@ export function useThreeScene(
     });
     sceneContainer.value!.appendChild(renderer.domElement);
 
-    // Scene
     scene = new THREE.Scene();
     scene.add(new THREE.AmbientLight(0xffffff, 0.15));
 
@@ -124,11 +115,9 @@ export function useThreeScene(
     scene.add(monitorLight);
     lightCurrent = LIGHT_DIM;
 
-    // CSS3D screen object
     screenObject = new CSS3DO(iframeContainer.value!);
     scene.add(screenObject);
 
-    // Stencil mesh
     const stencilMat = new THREE.MeshBasicMaterial({
       colorWrite: false,
       depthWrite: false,
@@ -145,7 +134,6 @@ export function useThreeScene(
     stencilMesh.renderOrder = 0;
     scene.add(stencilMesh);
 
-    // Mask mesh
     const maskMat = new THREE.MeshBasicMaterial({
       color: 0x000000,
       opacity: 0,
@@ -161,7 +149,6 @@ export function useThreeScene(
     maskMesh.renderOrder = 1;
     scene.add(maskMesh);
 
-    // Camera & Controls
     const cam = new THREE.PerspectiveCamera(
       45,
       window.innerWidth / window.innerHeight,
@@ -178,7 +165,7 @@ export function useThreeScene(
     orbitControls.minPolarAngle = Math.PI / 4;
     orbitControls.maxPolarAngle = Math.PI / 2.2;
     orbitControls.addEventListener('change', () => {
-      needsRender.value = true;
+      store.needsRender = true;
     });
     controls.value = orbitControls;
 
@@ -190,7 +177,7 @@ export function useThreeScene(
         if (!node.isMesh) return;
         const n = node.name.toLowerCase();
         if (n.includes('monitor') || n.includes('computer_monitor'))
-          monitorMeshes.value.push(node);
+          store.addMonitorMesh(node);
         if (
           n.includes('screen') ||
           n.includes('glass') ||
@@ -198,7 +185,7 @@ export function useThreeScene(
           n.includes('monitor_screen')
         )
           node.visible = false;
-        if (PAPER_MESHES.has(node.name)) paperMeshes.value.push(node);
+        if (PAPER_MESHES.has(node.name)) store.addPaperMesh(node);
         node.castShadow = true;
         node.receiveShadow = true;
         if (node.material) node.material.roughness = 0.8;
@@ -210,12 +197,12 @@ export function useThreeScene(
       orbitControls.minAzimuthAngle = centerAzimuth - Math.PI / 6;
       orbitControls.maxAzimuthAngle = centerAzimuth + Math.PI / 6;
 
-      cam.position.copy(cameraFar.value!.position);
-      orbitControls.target.copy(cameraFar.value!.target);
+      cam.position.copy(store.cameraFar!.position);
+      orbitControls.target.copy(store.cameraFar!.target);
       orbitControls.update();
 
-      sceneReady.value = true;
-      needsRender.value = true;
+      store.setSceneReady(true);
+      store.needsRender = true;
       onReady();
     });
 
@@ -225,19 +212,21 @@ export function useThreeScene(
 
       tickAnimation(delta);
 
-      // Fade suave da luz do monitor
-      if (monitorLight && Math.abs(lightCurrent - lightTarget) > 0.5) {
-        lightCurrent +=
-          (lightTarget - lightCurrent) * Math.min(LIGHT_SPEED * delta, 1);
-        monitorLight.intensity = lightCurrent;
-        needsRender.value = true;
+      if (monitorLight) {
+        const target = store.lightBright ? LIGHT_BRIGHT : LIGHT_DIM;
+        if (Math.abs(lightCurrent - target) > 0.5) {
+          lightCurrent +=
+            (target - lightCurrent) * Math.min(LIGHT_SPEED * delta, 1);
+          monitorLight.intensity = lightCurrent;
+          store.needsRender = true;
+        }
       }
 
       const controlsMoved = orbitControls.update();
-      if (controlsMoved) needsRender.value = true;
-      if (!needsRender.value) return;
+      if (controlsMoved) store.needsRender = true;
+      if (!store.needsRender) return;
 
-      needsRender.value = false;
+      store.needsRender = false;
 
       screenObject.position.set(SCREEN_POS.x, SCREEN_POS.y, SCREEN_POS.z);
       screenObject.scale.setScalar(SCREEN_POS.scale);
@@ -262,30 +251,23 @@ export function useThreeScene(
 
   function handleResize() {
     if (!camera.value) return;
-    (camera.value as PerspectiveCamera).aspect =
-      window.innerWidth / window.innerHeight;
+    camera.value.aspect = window.innerWidth / window.innerHeight;
     camera.value.updateProjectionMatrix();
     renderer?.setSize(window.innerWidth, window.innerHeight);
     cssRenderer.value?.setSize(window.innerWidth, window.innerHeight);
-    needsRender.value = true;
+    store.needsRender = true;
   }
 
   function dispose() {
     if (animFrameId !== null) cancelAnimationFrame(animFrameId);
     renderer?.dispose();
+    store.$reset();
   }
 
   return {
-    sceneReady,
-    needsRender,
     camera,
     controls,
     cssRenderer,
-    cameraFar,
-    cameraClose,
-    monitorMeshes,
-    paperMeshes,
-    setMonitorLightTarget,
     init,
     handleResize,
     dispose,

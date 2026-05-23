@@ -3,6 +3,7 @@ export default defineNuxtConfig({
   future: {
     compatibilityVersion: 4,
   },
+  modules: ['@pinia/nuxt'],
   app: {
     head: {
       title: 'Daniel Dev',
@@ -11,7 +12,6 @@ export default defineNuxtConfig({
           rel: 'preconnect',
           href: 'https://win-xp-7ht.pages.dev',
         },
-
         {
           rel: 'preload',
           href: '/scene.gltf',

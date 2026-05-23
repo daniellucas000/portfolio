@@ -1,8 +1,8 @@
 import type { Camera, Object3D } from 'three';
 import type { CSS3DRenderer } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
+import { useEventListener } from '@vueuse/core';
 import { PDF_URL } from '~/constants/scene';
-import type { CameraTarget, ScreenState } from './useSceneAnimation';
-
+import type { CameraTarget, ScreenState } from '~/stores/sceneAnimation';
 interface UseMouseInteractionOptions {
   camera: Ref<Camera | null>;
   cssRenderer: Ref<CSS3DRenderer | null>;
@@ -48,7 +48,7 @@ export function useMouseInteraction(options: UseMouseInteractionOptions) {
     } else {
       if (controls.value) controls.value.enabled = true;
       setCssRendererPointerEvents('auto');
-      setMonitorLightTarget(false); // apaga ao voltar
+      setMonitorLightTarget(false);
     }
   });
 
@@ -57,7 +57,7 @@ export function useMouseInteraction(options: UseMouseInteractionOptions) {
     screenState.isZoomedIn = true;
     screenState.isAnimating = false;
     if (controls.value) controls.value.enabled = false;
-    setMonitorLightTarget(true); // acende ao dar zoom
+    setMonitorLightTarget(true);
     startZoom(cameraClose.value, 0.8);
   }
 
@@ -68,12 +68,13 @@ export function useMouseInteraction(options: UseMouseInteractionOptions) {
     iframePointerEvents.value = 'none';
     setCssRendererPointerEvents('auto');
     startZoom(cameraFar.value, 0.8);
-    // luz apaga no onAnimationEnd para coincidir com o fim do zoom
   }
 
   function downloadPDF() {
     window.open(PDF_URL, '_blank');
   }
+
+  const rendererEl = computed(() => cssRenderer.value?.domElement ?? null);
 
   function buildHandlers(THREE: typeof import('three')) {
     const raycaster = new THREE.Raycaster();
@@ -135,16 +136,9 @@ export function useMouseInteraction(options: UseMouseInteractionOptions) {
       if (!hitMonitor()) zoomOut();
     }
 
-    const el = cssRenderer.value!.domElement;
-    el.addEventListener('mousemove', handleMouseMove);
-    el.addEventListener('click', handleClick);
-    document.addEventListener('click', handleDocumentClick);
-
-    return () => {
-      el.removeEventListener('mousemove', handleMouseMove);
-      el.removeEventListener('click', handleClick);
-      document.removeEventListener('click', handleDocumentClick);
-    };
+    useEventListener(rendererEl, 'mousemove', handleMouseMove);
+    useEventListener(rendererEl, 'click', handleClick);
+    useEventListener(document, 'click', handleDocumentClick);
   }
 
   function handleKeydown(e: KeyboardEvent) {
